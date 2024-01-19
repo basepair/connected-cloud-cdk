@@ -241,7 +241,7 @@ class BasepairConnectedCloud(Stack):
                         "s3:ListMultipartUploadParts"
                     ],
                     resources=[
-                        f"arn:aws:s3:::{self.bucket.bucket_name}"
+                        f"arn:aws:s3:::{self.bucket.bucket_name}",
                         f"arn:aws:s3:::{self.bucket.bucket_name}/*"
                     ],
                     effect=iam.Effect.ALLOW,
@@ -322,7 +322,7 @@ class BasepairConnectedCloud(Stack):
                 iam.PolicyStatement(
                     actions=["iam:PassRole"],
                     resources=[
-                        f"arn:aws:iam::{self.slave_account_id}:role/partner.basepair.worker"
+                        f"arn:aws:iam::{self.slave_account_id}:role/partner.basepair.worker",
                         f"arn:aws:iam::{self.slave_account_id}:role/partner.basepair.omics"
                     ],
                     effect=iam.Effect.ALLOW,
