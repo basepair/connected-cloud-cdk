@@ -6,21 +6,17 @@ from aws_cdk import (
     RemovalPolicy,
     Stack,
     aws_iam as iam,
-    aws_ec2 as ec2,
     aws_s3 as s3,
     aws_omics as omics,
 )
-from cdk_ec2_key_pair import KeyPair
 from constructs import Construct
-
-VPC_CIDR = "10.0.0.0/16"
-SUBNET_CIDR_MASK = 24
 
 
 class BasepairConnectedCloud(Stack):
     master_account_id = None
     master_role_name = None
     slave_account_id = os.getenv('CDK_DEFAULT_ACCOUNT')
+    slave_account_region = os.getenv('CDK_DEFAULT_REGION')
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -40,47 +36,6 @@ class BasepairConnectedCloud(Stack):
             default="Webapp-Prod01-NA-1-Prod",
             description="Master Account Role Name from Basepair",
         ).value_as_string
-
-        # Create a VPC
-        self.basepair_vpc = ec2.Vpc(
-            self,
-            "BasepairVPC",
-            ip_addresses=ec2.IpAddresses.cidr(VPC_CIDR),
-            max_azs=3,
-            nat_gateways=0,
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name="Public",
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=SUBNET_CIDR_MASK,
-                )
-            ]
-        )
-
-        # Create a Security Group
-        self.basepair_sg = ec2.SecurityGroup(
-            self,
-            "BasepairSecurityGroup",
-            vpc=self.basepair_vpc,
-            allow_all_outbound=True,
-            description="Basepair Security Group",
-        )
-
-        # Add ingress rules to allow SSH access from anywhere on port 58746
-        self.basepair_sg.add_ingress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(58746),
-            description="allow SSH access from anywhere",
-        )
-
-        # Create a Key Pair and save it in Secrets Manager
-        self.worker_keypair = KeyPair(
-            self,
-            "WorkerKeyPair",
-            description="Basepair Worker Key Pair",
-            name="worker",
-            store_public_key=True,
-        )
 
         # Create a s3 bucket for samples storage
         self.bucket = s3.Bucket(
@@ -126,9 +81,11 @@ class BasepairConnectedCloud(Stack):
             description="Omics Service Role",
             role_name="partner.basepair.omics",
             inline_policies={
-                "partner.basepair.omics.workflow": self._get_omics_workflow_policy(),
+                "partner.basepair.cw": self._get_cw_role_policy(),
                 "partner.basepair.omics.storage": self._get_omics_storage_policy(),
+                "partner.basepair.omics.workflow": self._get_omics_workflow_policy(),
                 "partner.basepair.s3": self._get_s3_policy()
+
             }
         )
 
@@ -140,49 +97,12 @@ class BasepairConnectedCloud(Stack):
             description="Basepair Trusted Role",
             role_name="partner.basepair.trusted",
             inline_policies={
-                "partner.basepair.cw.assume.role": self._get_cw_assume_role_policy(),
-                "partner.basepair.ec2.assume.role": self._get_ec2_assume_role_policy(),
+                "partner.basepair.cw": self._get_cw_role_policy(),
+                "partner.basepair.omics.storage": self._get_omics_storage_policy(),
+                "partner.basepair.omics.workflow": self._get_omics_workflow_policy(),
                 "partner.basepair.iam.assume.role": self._get_iam_assume_role_policy(),
                 "partner.basepair.s3": self._get_s3_policy()
             }
-        )
-
-        # Create a worker role for the ec2 instances
-        self.worker_role = iam.Role(
-            self,
-            "BasepairWorkerRole",
-            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description="Basepair Worker Role",
-            role_name="partner.basepair.worker",
-            inline_policies={
-                "basepair.ecr": self._get_basepair_ecr_policy(),
-                "partner.basepair.s3": self._get_s3_policy()
-            }
-        )
-
-        CfnOutput(
-            self,
-            "Subnet1Output",
-            export_name="Subnet1",
-            value=self.basepair_vpc.public_subnets[0].subnet_id
-        )
-        CfnOutput(
-            self,
-            "Subnet2Output",
-            export_name="Subnet2",
-            value=self.basepair_vpc.public_subnets[1].subnet_id
-        )
-        CfnOutput(
-            self,
-            "Subnet3Output",
-            export_name="Subnet3",
-            value=self.basepair_vpc.public_subnets[2].subnet_id
-        )
-        CfnOutput(
-            self,
-            "SecurityGroupOutput",
-            export_name="SecurityGroup",
-            value=self.basepair_sg.security_group_id
         )
 
         CfnOutput(
@@ -190,13 +110,6 @@ class BasepairConnectedCloud(Stack):
             "TrustedRoleOutput",
             export_name="TrustedRoleARN",
             value=self.trusted_role.role_arn
-        )
-
-        CfnOutput(
-            self,
-            "WorkerRoleOutput",
-            export_name="WorkerRoleARN",
-            value=self.worker_role.role_arn
         )
 
         CfnOutput(
@@ -232,13 +145,14 @@ class BasepairConnectedCloud(Stack):
             statements=[
                 iam.PolicyStatement(
                     actions=[
-                        "s3:PutObject",
+                        "s3:AbortMultipartUpload",
+                        "s3:GetBucketLocation",
                         "s3:GetObject",
                         "s3:GetObjectTagging",
                         "s3:ListBucket",
+                        "s3:ListMultipartUploadParts",
+                        "s3:PutObject",
                         "s3:PutObjectTagging",
-                        "s3:AbortMultipartUpload",
-                        "s3:ListMultipartUploadParts"
                     ],
                     resources=[
                         f"arn:aws:s3:::{self.bucket.bucket_name}",
@@ -255,16 +169,22 @@ class BasepairConnectedCloud(Stack):
             statements=[
                 iam.PolicyStatement(
                     actions=[
-                        "ram:AcceptResourceShareInvitation",
-                        "ram:GetResourceShareInvitations"
+                        "omics:BatchDeleteReadSet",
+                        "omics:GetReadSet",
+                        "omics:GetReadSetExportJob",
+                        "omics:GetReadSetImportJob",
+                        "omics:GetReadSetMetadata",
+                        "omics:GetReferenceImportJob",
+                        "omics:ListReadSets",
+                        "omics:StartReadSetExportJob",
+                        "omics:StartReadSetImportJob",
+                        "omics:StartReferenceImportJob",
                     ],
-                    resources=["*"]
-                ),
-                iam.PolicyStatement(
-                    actions=["omics:*"],
                     resources=[
-                        f"arn:aws:omics:::sequenceStore/{self.sequence_store.attr_sequence_store_id}/readSet/*",
-                        f"arn:aws:omics:::sequenceStore/{self.sequence_store.attr_sequence_store_id}"
+                        f"arn:aws:omics:{self.slave_account_region}:{self.slave_account_id}:referenceStore/{self.reference_store.attr_reference_store_id}/reference/*",
+                        f"arn:aws:omics:{self.slave_account_region}:{self.slave_account_id}:referenceStore/{self.reference_store.attr_reference_store_id}",
+                        f"arn:aws:omics:{self.slave_account_region}:{self.slave_account_id}:sequenceStore/{self.sequence_store.attr_sequence_store_id}/readSet/*",
+                        f"arn:aws:omics:{self.slave_account_region}:{self.slave_account_id}:sequenceStore/{self.sequence_store.attr_sequence_store_id}"
                     ]
                 )
             ]
@@ -272,57 +192,35 @@ class BasepairConnectedCloud(Stack):
 
     def _get_omics_workflow_policy(self):
         return iam.PolicyDocument(
-                    statements=[
-                        iam.PolicyStatement(
-                            actions=[
-                                "omics:GetRunTask",
-                                "omics:GetWorkflow",
-                                "omics:GetRun"
-                            ],
-                            resources=[
-                                f"arn:aws:omics:{os.getenv('CDK_DEFAULT_REGION')}:*:run/*",
-                                f"arn:aws:omics:{os.getenv('CDK_DEFAULT_REGION')}:*:task/*",
-                                f"arn:aws:omics:{os.getenv('CDK_DEFAULT_REGION')}:*:workflow/*"
-                            ]
-                        ),
-                        iam.PolicyStatement(
-                            actions=["omics:StartRun"],
-                            resources=["*"]
-                        )
-                    ]
-                )
-
-    def _get_basepair_ecr_policy(self):
-        return iam.PolicyDocument(
             statements=[
                 iam.PolicyStatement(
                     actions=[
-                        "ecr:BatchCheckLayerAvailability",
-                        "ecr:GetDownloadUrlForLayer",
-                        "ecr:GetRepositoryPolicy",
-                        "ecr:DescribeRepositories",
-                        "ecr:ListImages",
-                        "ecr:DescribeImages",
-                        "ecr:BatchGetImage",
-                        "ecr:GetLifecyclePolicy",
-                        "ecr:GetLifecyclePolicyPreview",
-                        "ecr:ListTagsForResource",
-                        "ecr:DescribeImageScanFindings"
+                        "omics:CreateWorkflow",
+                        "omics:DeleteRun",
+                        "omics:DeleteWorkflow",
+                        "omics:GetRun",
+                        "omics:GetRunTask",
+                        "omics:GetWorkflow",
+                        "omics:ListRunTasks",
+                        "omics:ListWorkflows",
+                        "omics:StartRun",
                     ],
-                    resources=[f"arn:aws:ecr:*:{self.master_account_id}:repository/bio-*"],
-                    conditions={"StringEquals": {"aws:ResourceTag/Type": "Bio"}},
-                    effect=iam.Effect.ALLOW,
-                    sid="AllowECRPullBioImage"
+                    resources=[
+                        f"arn:aws:omics:{self.slave_account_region}:{self.slave_account_id}:run/*",
+                        f"arn:aws:omics:{self.slave_account_region}:{self.slave_account_id}:task/*",
+                        f"arn:aws:omics:{self.slave_account_region}:{self.slave_account_id}:workflow/*",
+                        f"arn:aws:omics:{self.slave_account_region}::workflow/*"
+                    ]
                 )
             ]
         )
+
     def _get_iam_assume_role_policy(self):
         return iam.PolicyDocument(
             statements=[
                 iam.PolicyStatement(
                     actions=["iam:PassRole"],
                     resources=[
-                        f"arn:aws:iam::{self.slave_account_id}:role/partner.basepair.worker",
                         f"arn:aws:iam::{self.slave_account_id}:role/partner.basepair.omics"
                     ],
                     effect=iam.Effect.ALLOW,
@@ -331,84 +229,27 @@ class BasepairConnectedCloud(Stack):
             ]
         )
 
-    def _get_ec2_assume_role_policy(self):
+    def _get_cw_role_policy(self):
         return iam.PolicyDocument(
             statements=[
                 iam.PolicyStatement(
                     actions=[
-                        "ec2:TerminateInstances",
-                        "ec2:StartInstances",
-                        "ec2:CreateTags",
-                        "ec2:RunInstances",
-                        "ec2:StopInstances"
+                        "logs:DescribeLogStreams",
+                        "logs:CreateLogGroup"
                     ],
-                    resources=[
-                        "arn:aws:ec2:*:*:transit-gateway-route-table/*",
-                        "arn:aws:ec2:*:*:client-vpn-endpoint/*",
-                        "arn:aws:ec2:*::snapshot/*",
-                        "arn:aws:ec2:*:*:network-interface/*",
-                        "arn:aws:ec2:*:*:capacity-reservation/*",
-                        "arn:aws:ec2:*:*:traffic-mirror-target/*",
-                        "arn:aws:ec2:*:*:route-table/*",
-                        "arn:aws:ec2:*:*:dedicated-host/*",
-                        "arn:aws:ec2:*:*:key-pair/*",
-                        "arn:aws:ec2:*:*:instance/*",
-                        "arn:aws:ec2:*:*:transit-gateway-multicast-domain/*",
-                        "arn:aws:ec2:*:*:elastic-gpu/*",
-                        "arn:aws:ec2:*:*:local-gateway-route-table-virtual-interface-group-association/*",
-                        "arn:aws:ec2:*:*:vpc-flow-log/*",
-                        "arn:aws:ec2:*:*:vpc/*",
-                        "arn:aws:ec2:*::image/*",
-                        "arn:aws:ec2:*:*:vpc-endpoint-service/*",
-                        "arn:aws:ec2:*:*:subnet/*",
-                        "arn:aws:ec2:*:*:vpn-gateway/*",
-                        "arn:aws:ec2:*:*:reserved-instances/*",
-                        "arn:aws:ec2:*:*:vpn-connection/*",
-                        "arn:aws:ec2:*:*:local-gateway-route-table-vpc-association/*",
-                        "arn:aws:ec2:*:*:launch-template/*",
-                        "arn:aws:ec2:*:*:traffic-mirror-session/*",
-                        "arn:aws:ec2:*:*:security-group/*",
-                        "arn:aws:ec2:*:*:network-acl/*",
-                        "arn:aws:ec2:*:*:local-gateway/*",
-                        "arn:aws:ec2:*:*:placement-group/*",
-                        "arn:aws:ec2:*:*:internet-gateway/*",
-                        "arn:aws:ec2:*:*:vpc-endpoint/*",
-                        "arn:aws:ec2:*:*:spot-instances-request/*",
-                        "arn:aws:ec2:*:*:local-gateway-route-table/*",
-                        "arn:aws:ec2:*:*:local-gateway-virtual-interface-group/*",
-                        "arn:aws:ec2:*:*:dhcp-options/*",
-                        "arn:aws:elastic-inference:*:*:elastic-inference-accelerator/*",
-                        "arn:aws:ec2:*:*:traffic-mirror-filter/*",
-                        "arn:aws:ec2:*:*:local-gateway-virtual-interface/*",
-                        "arn:aws:ec2:*:*:transit-gateway/*",
-                        "arn:aws:ec2:*:*:volume/*",
-                        "arn:aws:ec2:*::fpga-image/*",
-                        "arn:aws:ec2:*:*:transit-gateway-attachment/*"
-                    ],
+                    resources=[f"arn:aws:logs:{self.slave_account_region}:{self.slave_account_id}:log-group:*"],
                     effect=iam.Effect.ALLOW,
+                    sid="AllowCWLogs",
                 ),
                 iam.PolicyStatement(
                     actions=[
-                        "ec2:DescribeSpotPriceHistory",
-                        "ec2:CancelSpotInstanceRequests",
-                        "ec2:DescribeInstances",
-                        "ec2:RequestSpotInstances",
-                        "ec2:DescribeTags",
-                        "ec2:RunScheduledInstances",
-                        "ec2:DescribeInstanceTypes",
-                        "ec2:DescribeSecurityGroups",
-                        "ec2:DescribeSpotInstanceRequests",
-                        "ec2:DescribeInstanceStatus"
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents"
                     ],
-                    resources=["*"],
+                    resources=[f"arn:aws:logs:{self.slave_account_region}:{self.slave_account_id}:log-group:*:log-stream:*"],
                     effect=iam.Effect.ALLOW,
-                )
-            ]
-        )
-
-    def _get_cw_assume_role_policy(self):
-        return iam.PolicyDocument(
-            statements=[
+                    sid="AllowCWLogsStream",
+                ),
                 iam.PolicyStatement(
                     actions=["cloudwatch:GetMetricStatistics"],
                     resources=["*"],
