@@ -48,12 +48,12 @@ App->>User: Display Results
 
 ## How to deploy?
 
-1. Request `MasterAccountId` and `MasterRoleName` from Basepair Team
+1. Request `BasepairAccountId` and `BasepairRoleName` from Basepair Team
 2. Run the below command and wait for the deployment to complete
    ```
    cdk deploy \
-       --parameters MasterAccountId=<Master Account Id> \
-       --parameters MasterRoleName=<Master Account Role Name> \
+       --parameters BasepairAccountId=<Basepair Account Id> \
+       --parameters BasepairRoleName=<Basepar Role Name> \
        --require-approval never \ 
        --outputs-file cdk.out.json
    ```
