@@ -53,7 +53,7 @@ App->>User: Display Results
    ```
    cdk deploy \
        --parameters BasepairAccountId=<Basepair Account Id> \
-       --parameters BasepairRoleName=<Basepar Role Name> \
+       --parameters BasepairRoleName=<Basepair Role Name> \
        --require-approval never \ 
        --outputs-file cdk.out.json
    ```
