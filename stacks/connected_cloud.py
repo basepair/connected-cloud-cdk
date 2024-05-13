@@ -239,7 +239,7 @@ class BasepairConnectedCloud(Stack):
                         "s3:GetObject",
                         "s3:GetObjectTagging",
                         "s3:ListBucket",
-                        "s3:ListMultipartUploadParts"
+                        "s3:ListMultipartUploadParts",
                         "s3:PutObject",
                         "s3:PutObjectTagging",
                     ],
@@ -444,29 +444,31 @@ class BasepairConnectedCloud(Stack):
 
     def _get_cw_role_policy(self):
         return iam.PolicyDocument(
-            iam.PolicyStatement(
-                actions=[
-                    "logs:DescribeLogStreams",
-                    "logs:CreateLogGroup"
-                ],
-                resources=[f"arn:aws:logs:{self.aws_region}:{self.aws_account_id}:log-group:*"],
-                effect=iam.Effect.ALLOW,
-                sid="AllowCWLogs",
-            ),
-            iam.PolicyStatement(
-                actions=[
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
-                ],
-                resources=[
-                    f"arn:aws:logs:{self.aws_region}:{self.aws_account_id}:log-group:*:log-stream:*"],
-                effect=iam.Effect.ALLOW,
-                sid="AllowCWLogsStream",
-            ),
-            iam.PolicyStatement(
-                actions=["cloudwatch:GetMetricStatistics"],
-                resources=["*"],
-                effect=iam.Effect.ALLOW,
-                sid="AllowCW",
-            )
+            statements=[
+                iam.PolicyStatement(
+                    actions=[
+                        "logs:DescribeLogStreams",
+                        "logs:CreateLogGroup"
+                    ],
+                    resources=[f"arn:aws:logs:{self.aws_region}:{self.aws_account_id}:log-group:*"],
+                    effect=iam.Effect.ALLOW,
+                    sid="AllowCWLogs",
+                ),
+                iam.PolicyStatement(
+                    actions=[
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents"
+                    ],
+                    resources=[
+                        f"arn:aws:logs:{self.aws_region}:{self.aws_account_id}:log-group:*:log-stream:*"],
+                    effect=iam.Effect.ALLOW,
+                    sid="AllowCWLogsStream",
+                ),
+                iam.PolicyStatement(
+                    actions=["cloudwatch:GetMetricStatistics"],
+                    resources=["*"],
+                    effect=iam.Effect.ALLOW,
+                    sid="AllowCW",
+                )
+            ]
         )
