@@ -162,6 +162,13 @@ class BasepairConnectedCloud(Stack):
             }
         )
 
+        instance_profile = iam.InstanceProfile(
+            self,
+            "InstanceProfile",
+            instance_profile_name="partner.basepair.worker",
+            role = self.worker_role,
+        )
+
         CfnOutput(
             self,
             "Subnet1Output",
