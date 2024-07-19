@@ -32,6 +32,7 @@ class BasepairConnectedCloud(Stack):
             type="String",
             default="613396392907",
             description="AWS Account ID from Basepair",
+            allowed_values=["613396392907"]
         ).value_as_string
 
         self.bp_role_name = CfnParameter(
@@ -40,6 +41,7 @@ class BasepairConnectedCloud(Stack):
             type="String",
             default="Webapp-Prod01-NA-1-Prod",
             description="AWS Role Name from Basepair",
+            allowed_values=["Webapp-Prod01-NA-1-Prod", "Webapp-Prod02-AP-1-Prod"]
         ).value_as_string
 
         # Create a VPC
