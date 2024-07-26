@@ -46,7 +46,17 @@ App->>User: Display Results
 6. Install dependencies
    1. `pip install -r requirements.txt`
 
-## How to deploy?
+## Deployment
+
+1. If you want to use `Connected cloud with Health Omics`, please click on the `Launch Stack` button above and follow the instructions
+
+<a href="https://console.aws.amazon.com/cloudformation/home?region=region#/stacks/new?stackName=BasepairConnectedCloud&templateURL=https://bp-publc.s3.amazonaws.com/cfn-mp-ql-basepair-ngs-ho-payg.yml"><img alt="Launch Health Omics Stack" src="https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg"></a>
+
+2. If you want to use `Connected cloud without Health Omics`, please click on the `Launch Basepair Stack` button above and follow the instructions
+
+<a href="https://console.aws.amazon.com/cloudformation/home?region=region#/stacks/new?stackName=BasepairConnectedCloud&templateURL=https://bp-publc.s3.amazonaws.com/cfn-mp-ql-basepair-ngs-payg.yml"><img alt="Launch Health Omics Stack" src="https://cdn.rawgit.com/buildkite/cloudformation-launch-stack-button-svg/master/launch-stack.svg"></a>
+
+## Development
 
 1. Request `BasepairAccountId` and `BasepairRoleName` from Basepair Team
 2. Run the below command and wait for the deployment to complete
