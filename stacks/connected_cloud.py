@@ -9,6 +9,7 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_s3 as s3,
     aws_omics as omics,
+    Duration,
 )
 from cdk_ec2_key_pair import KeyPair
 from constructs import Construct
@@ -127,6 +128,7 @@ class BasepairConnectedCloud(Stack):
             "OmicsRole",
             assumed_by=iam.ServicePrincipal("omics.amazonaws.com"),
             description="Omics Service Role",
+            max_session_duration=Duration.hours(12),
             role_name="partner.basepair.omics",
             inline_policies={
                 "partner.basepair.cw": self._get_cw_role_policy(),
@@ -141,6 +143,7 @@ class BasepairConnectedCloud(Stack):
             "BasepairTrustedRole",
             assumed_by=iam.ArnPrincipal(f"arn:aws:iam::{self.bp_account_id}:role/{self.bp_role_name}"),
             description="Basepair Trusted Role",
+            max_session_duration=Duration.hours(12),
             role_name="partner.basepair.trusted",
             inline_policies={
                 "partner.basepair.cw": self._get_cw_role_policy(),
@@ -157,6 +160,7 @@ class BasepairConnectedCloud(Stack):
             "BasepairWorkerRole",
             assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
             description="Basepair Worker Role",
+            max_session_duration=Duration.hours(12),
             role_name="partner.basepair.worker",
             inline_policies={
                 "basepair.ecr": self._get_basepair_ecr_policy(),
