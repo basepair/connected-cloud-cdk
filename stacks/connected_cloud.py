@@ -10,7 +10,6 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_omics as omics,
 )
-from cdk_ec2_key_pair import KeyPair
 from constructs import Construct
 
 VPC_CIDR = "10.0.0.0/16"
@@ -25,6 +24,13 @@ class BasepairConnectedCloud(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+        
+        iam.CfnServiceLinkedRole(
+            self,
+            "SpotInstanceServiceLinkedRole",
+            aws_service_name="spot.amazonaws.com",
+            description="Service-linked role for EC2 Spot Instances"
+        )
 
         self.bp_account_id = CfnParameter(
             self,
@@ -77,12 +83,11 @@ class BasepairConnectedCloud(Stack):
         )
 
         # Create a Key Pair and save it in Secrets Manager
-        self.worker_keypair = KeyPair(
+        self.worker_keypair = ec2.CfnKeyPair(
             self,
-            "WorkerKeyPair",
-            description="Basepair Worker Key Pair",
-            name="worker",
-            store_public_key=True,
+            "KeyPair",
+            key_name="worker",
+            key_type="rsa"
         )
 
         # Create a s3 bucket for samples storage
@@ -443,7 +448,9 @@ class BasepairConnectedCloud(Stack):
                         "ec2:DescribeInstanceTypes",
                         "ec2:DescribeSecurityGroups",
                         "ec2:DescribeSpotInstanceRequests",
-                        "ec2:DescribeInstanceStatus"
+                        "ec2:DescribeInstanceStatus",
+                        "ec2:DescribeSubnets",
+                        "ec2:DescribeImages",
                     ],
                     resources=["*"],
                     effect=iam.Effect.ALLOW,
