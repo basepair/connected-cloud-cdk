@@ -1,0 +1,628 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudFormation template to create a VPC with flexible options for new or existing configurations, security, and tagging.
+
+Parameters:
+  BasepairAccountId:
+    Type: String
+    Default: "590183662861"
+    AllowedValues:
+      - "590183662861"
+      - "776562512588"
+    Description: AWS Account ID from Basepair
+
+  BasepairRoleName:
+    Type: String
+    Default: Webapp-Prod01-NA-1-Prod
+    AllowedValues:
+      - Webapp-Prod01-NA-1-Prod
+      - Webapp-Prod02-AP-1-Prod
+      - webapp-preview-2223
+    Description: AWS Role Name from Basepair
+
+  CustomerVpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC Id.
+    Default: ""
+
+  CustomerPublicSubnet1:
+    Type: AWS::EC2::Subnet::Id
+    Description: first public subnet id.
+    Default: ""
+
+  CustomerPublicSubnet2:
+    Type: AWS::EC2::Subnet::Id
+    Description: second public subnet id.
+    Default: ""
+
+  CustomerPublicSubnet3:
+    Type: AWS::EC2::Subnet::Id
+    Description: third public subnet id.
+    Default: ""
+
+  CreateNewVPC:
+    Type: String
+    Description: Whether to create a new VPC (true/false).
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+  EnableSSHAccess:
+    Type: String
+    Description: Whether to enable SSH access (true/false).
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+
+Conditions:
+  IsNewVPC:
+    Fn::Equals: [ !Ref CreateNewVPC, "true" ]
+  UseExistingVpc: !And [!Not [!Equals [!Ref CreateNewVPC, "true"]], !Not [!Equals [!Ref CustomerVpcId, ""]]]
+  EnableSShAccess:
+    Fn::Equals: [ !Ref EnableSSHAccess, "true" ]
+
+Resources:
+
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Condition: IsNewVPC
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC
+        - Key: project
+          Value: basepair
+  PublicSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Condition: IsNewVPC
+    Properties:
+      VpcId: !If [ IsNewVPC, !Ref VPC, !Ref CustomerVpcId ]
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: Public
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC/PublicSubnet1
+        - Key: project
+          Value: basepair
+
+  VPCPublicSubnet1RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Condition: IsNewVPC
+    Properties:
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC/PublicSubnet1
+        - Key: project
+          Value: basepair
+      VpcId: !Ref VPC
+
+  VPCPublicSubnet1RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Condition: IsNewVPC
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicSubnet1RouteTable
+      SubnetId:
+        Ref: PublicSubnet1
+    DependsOn:
+      - VPCPublicSubnet1RouteTable
+
+  VPCPublicSubnet1DefaultRoute:
+    Type: "AWS::EC2::Route"
+    Condition: IsNewVPC
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref VPCPublicSubnet1RouteTable
+    DependsOn:
+      - IGWAttachment
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Condition: IsNewVPC
+    Properties:
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC
+        - Key: project
+          Value: basepair
+
+  IGWAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Condition: IsNewVPC
+    Properties:
+      VpcId: Fn::If [IsNewVPC, !Ref VPC, !Ref CustomerVpcId]
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet2:
+    Type: "AWS::EC2::Subnet"
+    Condition: IsNewVPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: Public
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC/PublicSubnet2
+        - Key: project
+          Value: basepair
+
+  VPCPublicSubnet2RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Condition: IsNewVPC
+    Properties:
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC/PublicSubnet2
+        - Key: project
+          Value: basepair
+      VpcId: !Ref VPC
+
+  VPCPublicSubnet2RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Condition: IsNewVPC
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicSubnet2RouteTable
+      SubnetId:
+        Ref: PublicSubnet2
+
+  VPCPublicSubnet2DefaultRoute4E1EB459:
+    Type: "AWS::EC2::Route"
+    Condition: IsNewVPC
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref VPCPublicSubnet2RouteTable
+    DependsOn:
+      - IGWAttachment
+
+  PublicSubnet3:
+    Type: "AWS::EC2::Subnet"
+    Condition: IsNewVPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [ 2, !GetAZs "" ]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: aws-cdk:subnet-name
+          Value: Public
+        - Key: aws-cdk:subnet-type
+          Value: Public
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC/PublicSubnet3
+        - Key: project
+          Value: basepair
+
+  VPCPublicSubnet3RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Condition: IsNewVPC
+    Properties:
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: Name
+          Value: BasepairConnectedCloud/BasepairVPC/PublicSubnet3
+        - Key: project
+          Value: basepair
+      VpcId: !Ref VPC
+
+  VPCPublicSubnet3RouteTableAssociation02F8ECB9:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Condition: IsNewVPC
+    Properties:
+      RouteTableId:
+        Ref: VPCPublicSubnet3RouteTable
+      SubnetId:
+        Ref: PublicSubnet3
+  BasepairVPCPublicSubnet3DefaultRouteE624408D:
+    Type: "AWS::EC2::Route"
+    Condition: IsNewVPC
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref VPCPublicSubnet3RouteTable
+    DependsOn:
+      - IGWAttachment
+
+  CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+        - Fn::Sub: arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: Inline
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:AuthorizeSecurityGroupIngress
+                  - ec2:AuthorizeSecurityGroupEgress
+                  - ec2:RevokeSecurityGroupIngress
+                  - ec2:RevokeSecurityGroupEgress
+                Resource:
+                  Fn::If:
+                    - IsNewVPC
+                    - Fn::Join:
+                        - ""
+                        - - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/"
+                          - Fn::GetAtt: [ VPC, DefaultSecurityGroup ]
+                    - Fn::Join:
+                        - ""
+                        - - !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:security-group/"
+                          - !Ref CustomerVpcId
+  SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Basepair security group"
+      VpcId: !If [ IsNewVPC, !Ref VPC, !Ref CustomerVpcId ]
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic by default
+          IpProtocol: "-1"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          Description: allow SSH access from anywhere
+          FromPort: 58746
+          IpProtocol: tcp
+          ToPort: 58746
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: project
+          Value: basepair
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "${AWS::AccountId}-basepair-mb-testing"
+      AccessControl: BucketOwnerFullControl
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - HEAD
+              - POST
+              - PUT
+            AllowedOrigins:
+              - https://*.basepairtech.com
+            ExposedHeaders:
+              - ETag
+              - Content-Type
+              - Content-Length
+            MaxAge: 3000
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: project
+          Value: basepair
+  Worker:
+    Type: "AWS::EC2::KeyPair"
+    Properties:
+      KeyName: "worker"
+  SpotServiceLinkedRole:
+    Type: "AWS::IAM::ServiceLinkedRole"
+    Properties:
+      AWSServiceName: spot.amazonaws.com
+      Description: "Service-linked role required for AWS And MB Spot Instances"
+  InstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::Join:
+                  - ""
+                  - - "arn:aws:iam::"
+                    - Ref: BasepairAccountId
+                    - :role/
+                    - Ref: BasepairRoleName
+        Version: "2012-10-17"
+      Description: Basepair Trusted Role
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:DescribeLogStreams
+                Effect: Allow
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                Sid: AllowCWLogs
+              - Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*:log-stream:*"
+                Sid: AllowCWLogsStream
+              - Action: cloudwatch:GetMetricStatistics
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowCW
+            Version: "2012-10-17"
+          PolicyName: partner.basepair.cw.mb
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - ec2:CreateTags
+                  - ec2:RunInstances
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                  - ec2:TerminateInstances
+                Effect: Allow
+                Resource:
+                  - arn:aws:ec2:*:*:capacity-reservation/*
+                  - arn:aws:ec2:*:*:client-vpn-endpoint/*
+                  - arn:aws:ec2:*:*:dedicated-host/*
+                  - arn:aws:ec2:*:*:dhcp-options/*
+                  - arn:aws:ec2:*:*:elastic-gpu/*
+                  - arn:aws:ec2:*:*:instance/*
+                  - arn:aws:ec2:*:*:internet-gateway/*
+                  - arn:aws:ec2:*:*:key-pair/*
+                  - arn:aws:ec2:*:*:launch-template/*
+                  - arn:aws:ec2:*:*:local-gateway-route-table-virtual-interface-group-association/*
+                  - arn:aws:ec2:*:*:local-gateway-route-table-vpc-association/*
+                  - arn:aws:ec2:*:*:local-gateway-route-table/*
+                  - arn:aws:ec2:*:*:local-gateway-virtual-interface-group/*
+                  - arn:aws:ec2:*:*:local-gateway-virtual-interface/*
+                  - arn:aws:ec2:*:*:local-gateway/*
+                  - arn:aws:ec2:*:*:network-acl/*
+                  - arn:aws:ec2:*:*:network-interface/*
+                  - arn:aws:ec2:*:*:placement-group/*
+                  - arn:aws:ec2:*:*:reserved-instances/*
+                  - arn:aws:ec2:*:*:route-table/*
+                  - arn:aws:ec2:*:*:security-group/*
+                  - arn:aws:ec2:*:*:spot-instances-request/*
+                  - arn:aws:ec2:*:*:subnet/*
+                  - arn:aws:ec2:*:*:traffic-mirror-filter/*
+                  - arn:aws:ec2:*:*:traffic-mirror-session/*
+                  - arn:aws:ec2:*:*:traffic-mirror-target/*
+                  - arn:aws:ec2:*:*:transit-gateway-attachment/*
+                  - arn:aws:ec2:*:*:transit-gateway-multicast-domain/*
+                  - arn:aws:ec2:*:*:transit-gateway-route-table/*
+                  - arn:aws:ec2:*:*:transit-gateway/*
+                  - arn:aws:ec2:*:*:volume/*
+                  - arn:aws:ec2:*:*:vpc-endpoint-service/*
+                  - arn:aws:ec2:*:*:vpc-endpoint/*
+                  - arn:aws:ec2:*:*:vpc-flow-log/*
+                  - arn:aws:ec2:*:*:vpc/*
+                  - arn:aws:ec2:*:*:vpn-connection/*
+                  - arn:aws:ec2:*:*:vpn-gateway/*
+                  - arn:aws:ec2:*::fpga-image/*
+                  - arn:aws:ec2:*::image/*
+                  - arn:aws:ec2:*::snapshot/*
+                  - arn:aws:elastic-inference:*:*:elastic-inference-accelerator/*
+              - Action:
+                  - ec2:CancelSpotInstanceRequests
+                  - ec2:DescribeInstanceStatus
+                  - ec2:DescribeInstanceTypes
+                  - ec2:DescribeInstances
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeSpotInstanceRequests
+                  - ec2:DescribeSpotPriceHistory
+                  - ec2:DescribeTags
+                  - ec2:RequestSpotInstances
+                  - ec2:RunScheduledInstances
+                  - ec2:DescribeSubnets
+                  - ec2:DescribeImages
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: partner.basepair.ec2.mb
+        - PolicyDocument:
+            Statement:
+              - Action: iam:PassRole
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:iam::${AWS::AccountId}:role/partner.basepair.worker.mb"
+                Sid: IAMSetRoleToWorkers
+            Version: "2012-10-17"
+          PolicyName: partner.basepair.iam.mb
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:GetObjectTagging
+                  - s3:ListBucket
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Effect: Allow
+                Resource:
+                  - Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - Ref: S3Bucket
+                        - /*
+                  - Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - Ref: S3Bucket
+                Sid: AllowS3
+            Version: "2012-10-17"
+          PolicyName: partner.basepair.s3.mb
+      RoleName: partner.basepair.trusted.mb
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: project
+          Value: basepair
+  BasepairWorkerRole8118E21C:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: "2012-10-17"
+      Description: Basepair Worker Role
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:DescribeImageScanFindings
+                  - ecr:DescribeImages
+                  - ecr:DescribeRepositories
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:GetLifecyclePolicy
+                  - ecr:GetLifecyclePolicyPreview
+                  - ecr:GetRepositoryPolicy
+                  - ecr:ListImages
+                  - ecr:ListTagsForResource
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/Type: Bio
+                Effect: Allow
+                Resource:
+                  Fn::Join:
+                    - ""
+                    - - "arn:aws:ecr:*:"
+                      - Ref: BasepairAccountId
+                      - :repository/bio-*
+                Sid: AllowECRPullBioImage
+            Version: "2012-10-17"
+          PolicyName: basepair.ecr.mb
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:GetObjectTagging
+                  - s3:ListBucket
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Effect: Allow
+                Resource:
+                  - Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - Ref: S3Bucket
+                        - /*
+                  - Fn::Join:
+                      - ""
+                      - - "arn:aws:s3:::"
+                        - Ref: S3Bucket
+                Sid: AllowS3
+            Version: "2012-10-17"
+          PolicyName: partner.basepair.s3.mb
+      RoleName: partner.basepair.worker.mb
+      Tags:
+        - Key: created-by
+          Value: cdk
+        - Key: env
+          Value: prod
+        - Key: project
+          Value: basepair
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: "partner.basepair.worker.mb"
+      Roles:
+        - !Ref BasepairWorkerRole8118E21C
+Outputs:
+  VPCId:
+    Description: ID of the created or existing VPC
+    Value: !If [ IsNewVPC, !Ref VPC, !Ref CustomerVpcId ]
+  PublicSubnet1Id:
+    Description: ID of the first public subnet
+    Value: !If [ IsNewVPC, !Ref PublicSubnet1, !Ref CustomerPublicSubnet1 ]
+  PublicSubnet2Id:
+    Description: ID of the second public subnet
+    Value: !If [ IsNewVPC, !Ref PublicSubnet2, !Ref CustomerPublicSubnet2 ]
+  PublicSubnet3Id:
+    Description: ID of the third public subnet
+    Value: !If [ IsNewVPC, !Ref PublicSubnet3, !Ref CustomerPublicSubnet3 ]
+  SecurityGroupOutput:
+    Value:
+      Fn::GetAtt:
+        - SecurityGroup
+        - GroupId
+  WorkerRoleOutput:
+    Value:
+      Fn::GetAtt:
+        - BasepairWorkerRole8118E21C
+        - Arn
+    Export:
+      Name: WorkerRoleARN
+  BucketName:
+    Description: Name of the created S3 bucket
+    Value: !Ref S3Bucket
+  InstanceRoleArn:
+    Description: ARN of the created IAM instance role
+    Value: !GetAtt InstanceRole.Arn
