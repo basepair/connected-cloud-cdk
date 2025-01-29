@@ -12,6 +12,16 @@ Parameters:
       - Webapp-Prod01-NA-1-Prod
       - Webapp-Prod02-AP-1-Prod
     Description: AWS Role Name from Basepair
+  CreateSpotServiceLinkedRole:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Default: true
+    Description: "Set to true to if you have never used spot machine in your account, false if it already exists."
+Conditions:
+  ShouldCreateSpotServiceLinkedRole: !Equals [ !Ref CreateSpotServiceLinkedRole, "true" ]
+
 Resources:
   BasepairVPC:
     Type: AWS::EC2::VPC
@@ -298,6 +308,7 @@ Resources:
       KeyName: "worker"
   SpotServiceLinkedRole:
     Type: AWS::IAM::ServiceLinkedRole
+    Condition: ShouldCreateSpotServiceLinkedRole
     Properties:
       AWSServiceName: spot.amazonaws.com
       Description: "Service-linked role required for AWS Spot Instances"
