@@ -152,7 +152,8 @@ class BasepairConnectedCloud(Stack):
                 "partner.basepair.ec2": self._get_ec2_assume_role_policy(),
                 "partner.basepair.iam": self._get_iam_assume_role_policy(),
                 "partner.basepair.omics": self._get_omics_storage_policy(),
-                "partner.basepair.s3": self._get_s3_policy()
+                "partner.basepair.s3": self._get_s3_policy(),
+                "partner.basepair.sm": self._get_sm_create_policy(),
             }
         )
 
@@ -264,6 +265,26 @@ class BasepairConnectedCloud(Stack):
                     ],
                     effect=iam.Effect.ALLOW,
                     sid="AllowS3"
+                )
+            ]
+        )
+
+    def _get_sm_create_policy(self):
+        return iam.PolicyDocument(
+            statements=[
+                iam.PolicyStatement(
+                    actions=[
+                        "secretsmanager:CreateSecret",
+                        "secretsmanager:TagResource",
+                    ],
+                    conditions={
+                        "StringLike": {
+                            "aws:ResourceTag/ID": "worker_secrets_*"
+                        }
+                    },
+                    effect=iam.Effect.ALLOW,
+                    resources=["*"],
+                    sid="AllowSM"
                 )
             ]
         )
