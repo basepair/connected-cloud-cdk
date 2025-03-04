@@ -24,7 +24,7 @@ class BasepairConnectedCloud(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-        
+
         iam.CfnServiceLinkedRole(
             self,
             "SpotInstanceServiceLinkedRole",
@@ -152,7 +152,8 @@ class BasepairConnectedCloud(Stack):
                 "partner.basepair.ec2": self._get_ec2_assume_role_policy(),
                 "partner.basepair.iam": self._get_iam_assume_role_policy(),
                 "partner.basepair.omics": self._get_omics_storage_policy(),
-                "partner.basepair.s3": self._get_s3_policy()
+                "partner.basepair.s3": self._get_s3_policy(),
+                "partner.basepair.sm": self._get_sm_create_policy(),
             }
         )
 
@@ -165,7 +166,8 @@ class BasepairConnectedCloud(Stack):
             role_name="partner.basepair.worker",
             inline_policies={
                 "basepair.ecr": self._get_basepair_ecr_policy(),
-                "partner.basepair.s3": self._get_s3_policy()
+                "partner.basepair.s3": self._get_s3_policy(),
+                "partner.basepair.sm": self._get_sm_policy(),
             }
         )
 
@@ -263,6 +265,46 @@ class BasepairConnectedCloud(Stack):
                     ],
                     effect=iam.Effect.ALLOW,
                     sid="AllowS3"
+                )
+            ]
+        )
+
+    def _get_sm_create_policy(self):
+        return iam.PolicyDocument(
+            statements=[
+                iam.PolicyStatement(
+                    actions=[
+                        "secretsmanager:CreateSecret",
+                        "secretsmanager:TagResource",
+                    ],
+                    conditions={
+                        "StringLike": {
+                            "aws:ResourceTag/ID": "worker_secrets_*"
+                        }
+                    },
+                    effect=iam.Effect.ALLOW,
+                    resources=["*"],
+                    sid="AllowSM"
+                )
+            ]
+        )
+
+    def _get_sm_policy(self):
+        return iam.PolicyDocument(
+            statements=[
+                iam.PolicyStatement(
+                    actions=[
+                        "secretsmanager:GetSecretValue",
+                        "secretsmanager:DeleteSecret",
+                    ],
+                    conditions={
+                        "StringLike": {
+                            "aws:ResourceTag/ID": "worker_secrets_*"
+                        }
+                    },
+                    effect=iam.Effect.ALLOW,
+                    resources=["*"],
+                    sid="AllowSM"
                 )
             ]
         )
