@@ -25,12 +25,9 @@ class BasepairConnectedCloud(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
-        iam.CfnServiceLinkedRole(
-            self,
-            "SpotInstanceServiceLinkedRole",
-            aws_service_name="spot.amazonaws.com",
-            description="Service-linked role for EC2 Spot Instances"
-        )
+        self.deploy_with_omics = self.node.try_get_context("deploy_with_omics") in ["Yes", "yes", "Y", "y"]
+
+        self.create_spot_service_linked_role = self.node.try_get_context("create_spot_service_linked_role") in ["Yes", "yes", "Y", "y"]
 
         self.bp_account_id = CfnParameter(
             self,
@@ -49,6 +46,14 @@ class BasepairConnectedCloud(Stack):
             description="AWS Role Name from Basepair",
             allowed_values=["Webapp-Prod01-NA-1-Prod", "Webapp-Prod02-AP-1-Prod"]
         ).value_as_string
+
+        if self.create_spot_service_linked_role:
+            iam.CfnServiceLinkedRole(
+                self,
+                "SpotInstanceServiceLinkedRole",
+                aws_service_name="spot.amazonaws.com",
+                description="Service-linked role for EC2 Spot Instances"
+            )
 
         # Create a VPC
         self.basepair_vpc = ec2.Vpc(
@@ -111,50 +116,54 @@ class BasepairConnectedCloud(Stack):
         )
 
         # Create a Reference store in omics
-        self.reference_store = omics.CfnReferenceStore(
-            self,
-            "BasepairReferenceStore",
-            name="BasepairReferenceStore",
-            description="Basepair Reference Store"
-        )
+        if self.deploy_with_omics:
+            self.reference_store = omics.CfnReferenceStore(
+                self,
+                "BasepairReferenceStore",
+                name="BasepairReferenceStore",
+                description="Basepair Reference Store"
+            )
 
-        # Create a Sequence store in omics
-        self.sequence_store = omics.CfnSequenceStore(
-            self,
-            "BasepairSequenceStore",
-            name="BasepairSequenceStore",
-            description="Basepair Sequence Store"
-        )
+            # Create a Sequence store in omics
+            self.sequence_store = omics.CfnSequenceStore(
+                self,
+                "BasepairSequenceStore",
+                name="BasepairSequenceStore",
+                description="Basepair Sequence Store"
+            )
 
-        # Create Omics service role
-        self.omics_role = iam.Role(
-            self,
-            "OmicsRole",
-            assumed_by=iam.ServicePrincipal("omics.amazonaws.com"),
-            description="Omics Service Role",
-            role_name="partner.basepair.omics",
-            inline_policies={
-                "partner.basepair.cw": self._get_cw_role_policy(),
-                "partner.basepair.omics": self._get_omics_storage_policy(),
-                "partner.basepair.s3": self._get_s3_policy()
-            }
-        )
+            # Create Omics service role
+            self.omics_role = iam.Role(
+                self,
+                "OmicsRole",
+                assumed_by=iam.ServicePrincipal("omics.amazonaws.com"),
+                description="Omics Service Role",
+                role_name="partner.basepair.omics",
+                inline_policies={
+                    "partner.basepair.cw": self._get_cw_role_policy(),
+                    "partner.basepair.omics": self._get_omics_storage_policy(),
+                    "partner.basepair.s3": self._get_s3_policy()
+                }
+            )
 
         # Create a trusted role for the basepair to access resources in the partner account
+        inline_policies = {
+            "partner.basepair.cw": self._get_cw_role_policy(),
+            "partner.basepair.ec2": self._get_ec2_assume_role_policy(),
+            "partner.basepair.iam": self._get_iam_assume_role_policy(),
+            "partner.basepair.s3": self._get_s3_policy(),
+            "partner.basepair.sm": self._get_sm_create_policy(),
+        }
+        if self.deploy_with_omics:
+            inline_policies["partner.basepair.omics"] = self._get_omics_storage_policy()
+
         self.trusted_role = iam.Role(
             self,
             "BasepairTrustedRole",
             assumed_by=iam.ArnPrincipal(f"arn:aws:iam::{self.bp_account_id}:role/{self.bp_role_name}"),
             description="Basepair Trusted Role",
             role_name="partner.basepair.trusted",
-            inline_policies={
-                "partner.basepair.cw": self._get_cw_role_policy(),
-                "partner.basepair.ec2": self._get_ec2_assume_role_policy(),
-                "partner.basepair.iam": self._get_iam_assume_role_policy(),
-                "partner.basepair.omics": self._get_omics_storage_policy(),
-                "partner.basepair.s3": self._get_s3_policy(),
-                "partner.basepair.sm": self._get_sm_create_policy(),
-            }
+            inline_policies=inline_policies
         )
 
         # Create a worker role for the ec2 instances
@@ -175,7 +184,7 @@ class BasepairConnectedCloud(Stack):
             self,
             "InstanceProfile",
             instance_profile_name="partner.basepair.worker",
-            role = self.worker_role,
+            role=self.worker_role,
         )
 
         CfnOutput(
@@ -219,31 +228,31 @@ class BasepairConnectedCloud(Stack):
 
         CfnOutput(
             self,
-            "OmicsRoleOutput",
-            export_name="OmicsRoleARN",
-            value=self.omics_role.role_arn
-        )
-
-        CfnOutput(
-            self,
             "BucketOutput",
             export_name="BucketName",
             value=self.bucket.bucket_name
         )
+        if self.deploy_with_omics:
+            CfnOutput(
+                self,
+                "OmicsRoleOutput",
+                export_name="OmicsRoleARN",
+                value=self.omics_role.role_arn
+            )
 
-        CfnOutput(
-            self,
-            "SequenceStoreOutput",
-            export_name="SequenceStoreId",
-            value=self.sequence_store.attr_sequence_store_id
-        )
+            CfnOutput(
+                self,
+                "SequenceStoreOutput",
+                export_name="SequenceStoreId",
+                value=self.sequence_store.attr_sequence_store_id
+            )
 
-        CfnOutput(
-            self,
-            "ReferenceStoreOutput",
-            export_name="ReferenceStoreId",
-            value=self.reference_store.attr_reference_store_id
-        )
+            CfnOutput(
+                self,
+                "ReferenceStoreOutput",
+                export_name="ReferenceStoreId",
+                value=self.reference_store.attr_reference_store_id
+            )
 
     def _get_s3_policy(self):
         return iam.PolicyDocument(
@@ -409,14 +418,17 @@ class BasepairConnectedCloud(Stack):
         )
 
     def _get_iam_assume_role_policy(self):
+        resources = [
+            f"arn:aws:iam::{self.aws_account_id}:role/partner.basepair.worker",
+        ]
+        if self.deploy_with_omics:
+            resources.append(f"arn:aws:iam::{self.aws_account_id}:role/partner.basepair.omics")
+
         return iam.PolicyDocument(
             statements=[
                 iam.PolicyStatement(
                     actions=["iam:PassRole"],
-                    resources=[
-                        f"arn:aws:iam::{self.aws_account_id}:role/partner.basepair.worker",
-                        f"arn:aws:iam::{self.aws_account_id}:role/partner.basepair.omics"
-                    ],
+                    resources=resources,
                     effect=iam.Effect.ALLOW,
                     sid="IAMSetRoleToWorkers"
                 )
