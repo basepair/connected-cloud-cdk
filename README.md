@@ -64,9 +64,15 @@ App->>User: Display Results
    cdk deploy \
        --parameters BasepairAccountId=<Basepair Account Id> \
        --parameters BasepairRoleName=<Basepair Role Name> \
+       -c deploy_with_omics=<"Yes/No"> \
+       -c create_spot_service_linked_role=<"Yes/No"> \
        --require-approval never \ 
        --outputs-file cdk.out.json
    ```
+   Note:
+   * Set deploy_with_omics Yes if you want Connected cloud with omics by default it is set to No.
+   * Set create_spot_service_linked_role Yes if you dont have `AWSServiceRoleForEC2Spot` role.
+
 3. After the above command is successfully completed, Please share the `cdk.out.json` file with Basepair Team
 4. For any support, please reach out to Basepair Team
 
